@@ -6,7 +6,6 @@ RUN apt-get update && apt-get install -y \
     python3 \
     python3-venv \
     python3-pip \
-    sqlite3 \
     curl \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
@@ -17,7 +16,7 @@ ENV PATH="/opt/whisper/bin:$PATH"
 
 # Instalar faster-whisper DENTRO del venv
 RUN pip install --upgrade pip \
-    && pip install faster-whisper==1.0.3 requests
+    && pip install faster-whisper==1.0.3
 
 # App Node
 WORKDIR /app
@@ -27,7 +26,13 @@ RUN npm install --omit=dev
 COPY src ./src
 
 # Carpetas de data
-RUN mkdir -p /data/inbox /data/work /data/out /data/published /data/db /data/face /data/temp
+RUN mkdir -p /data/inbox /data/out /data/published /data/face /data/temp /data/audio
 
-# Ejecutar scheduler (reemplaza cron)
-CMD ["node", "src/scheduler.js"]
+# Variables
+ENV NODE_ENV=production
+ENV DATA_PATH=/data
+ENV PORT=3000
+
+EXPOSE 3000
+
+CMD ["node", "src/server.js"]
