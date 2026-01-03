@@ -8,7 +8,13 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     curl \
     ca-certificates \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
+
+# Instalar Deno (requerido por yt-dlp para descifrar videos de YouTube)
+RUN curl -fsSL https://deno.land/install.sh | sh
+ENV DENO_INSTALL="/root/.deno"
+ENV PATH="${DENO_INSTALL}/bin:${PATH}"
 
 # Crear virtualenv para Whisper
 RUN python3 -m venv /opt/whisper

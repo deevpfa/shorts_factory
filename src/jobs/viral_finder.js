@@ -13,85 +13,81 @@ fs.mkdirSync(temp, { recursive: true });
 // Buscar yt-dlp en diferentes ubicaciones
 const ytdlp = fs.existsSync('/opt/whisper/bin/yt-dlp')
   ? '/opt/whisper/bin/yt-dlp'
-  : 'yt-dlp';
+  : '.venv/bin/yt-dlp';
 
-// Términos de búsqueda para videos virales
-const searchTerms = [
-  'viral shorts',
-  'satisfying video',
-  'amazing moments',
-  'incredible skills',
-  'next level'
+// Subreddits con videos cortos virales (no requieren auth)
+const subreddits = [
+  'oddlysatisfying',
+  'nextfuckinglevel',
+  'BeAmazed',
+  'Damnthatsinteresting',
+  'interestingasfuck',
+  'toptalent',
+  'woahdude',
+  'blackmagicfuckery'
 ];
 
-// Obtener un término aleatorio
-const searchTerm = searchTerms[Math.floor(Math.random() * searchTerms.length)];
-console.log('Searching for:', searchTerm);
+// Seleccionar un subreddit aleatorio
+const subreddit = subreddits[Math.floor(Math.random() * subreddits.length)];
+console.log('Searching subreddit:', subreddit);
 
-// Buscar videos en las 3 plataformas
-async function searchVideos() {
+// Buscar videos en Reddit
+async function searchRedditVideos() {
   const videos = [];
 
-  // YouTube Shorts
   try {
-    console.log('Searching YouTube Shorts...');
-    const ytResult = execSync(
-      `${ytdlp} "ytsearch10:${searchTerm} shorts" --print "%(id)s|%(title)s|%(view_count)s|%(duration)s" --no-download`,
-      { encoding: 'utf8', timeout: 60000, stdio: ['pipe', 'pipe', 'pipe'] }
-    );
+    console.log('Fetching from Reddit...');
 
-    for (const line of ytResult.trim().split('\n')) {
-      if (!line) continue;
-      const [id, title, views, duration] = line.split('|');
-      const viewCount = parseInt(views) || 0;
-      const dur = parseInt(duration) || 0;
-
-      // Solo videos cortos (menos de 60 segundos) con muchas vistas
-      if (dur > 0 && dur <= 60 && viewCount > 10000) {
-        videos.push({
-          platform: 'youtube',
-          id,
-          title: title || '',
-          views: viewCount,
-          duration: dur,
-          url: `https://www.youtube.com/shorts/${id}`
-        });
+    // Usar la API JSON pública de Reddit
+    const res = await fetch(`https://www.reddit.com/r/${subreddit}/hot.json?limit=25`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; VideoBot/1.0)'
       }
+    });
+
+    if (!res.ok) {
+      throw new Error(`Reddit API error: ${res.status}`);
     }
-    console.log(`Found ${videos.filter(v => v.platform === 'youtube').length} YouTube videos`);
-  } catch (err) {
-    console.log('YouTube search failed:', err.message);
-    if (err.stderr) console.log('stderr:', err.stderr.toString());
-  }
 
-  // TikTok (búsqueda limitada sin auth)
-  try {
-    console.log('Searching TikTok...');
-    const ttResult = execSync(
-      `${ytdlp} "https://www.tiktok.com/tag/${searchTerm.replace(/\s+/g, '')}" --flat-playlist --print "%(id)s|%(title)s|%(view_count)s|%(duration)s" --playlist-items 1-10 --no-download 2>/dev/null || true`,
-      { encoding: 'utf8', timeout: 60000 }
-    );
+    const data = await res.json();
 
-    for (const line of ttResult.trim().split('\n')) {
-      if (!line || line.includes('ERROR')) continue;
-      const [id, title, views, duration] = line.split('|');
-      const viewCount = parseInt(views) || 0;
-      const dur = parseInt(duration) || 0;
+    for (const post of data.data.children) {
+      const p = post.data;
 
-      if (id && viewCount > 10000) {
-        videos.push({
-          platform: 'tiktok',
-          id,
-          title: title || '',
-          views: viewCount,
-          duration: dur,
-          url: `https://www.tiktok.com/@/video/${id}`
-        });
-      }
+      // Solo posts con video o enlaces a videos
+      const isVideo = p.is_video ||
+        p.url?.includes('v.redd.it') ||
+        p.url?.includes('streamable.com') ||
+        p.url?.includes('gfycat.com') ||
+        p.url?.includes('imgur.com/') && p.url?.includes('.mp4');
+
+      if (!isVideo) continue;
+
+      // Filtrar por upvotes (popularidad)
+      if (p.ups < 1000) continue;
+
+      // Obtener duración si está disponible
+      const duration = p.media?.reddit_video?.duration || 0;
+
+      // Solo videos cortos (menos de 60 segundos) o sin duración conocida
+      if (duration > 60) continue;
+
+      videos.push({
+        platform: 'reddit',
+        id: p.id,
+        title: p.title || '',
+        views: p.ups, // Usamos upvotes como proxy de popularidad
+        duration: duration,
+        url: p.url?.includes('v.redd.it')
+          ? `https://www.reddit.com${p.permalink}`
+          : p.url,
+        permalink: p.permalink
+      });
     }
-    console.log(`Found ${videos.filter(v => v.platform === 'tiktok').length} TikTok videos`);
+
+    console.log(`Found ${videos.length} Reddit videos`);
   } catch (err) {
-    console.log('TikTok search skipped:', err.message);
+    console.log('Reddit search failed:', err.message);
   }
 
   return videos;
@@ -99,7 +95,7 @@ async function searchVideos() {
 
 // Descargar video con yt-dlp
 async function downloadVideo(video) {
-  const prefix = video.platform === 'youtube' ? 'yt' : video.platform === 'tiktok' ? 'tt' : 'tw';
+  const prefix = 'rd';
   const finalPath = path.join(inbox, `${prefix}_${video.id}.mp4`);
   const metaPath = path.join(inbox, `${prefix}_${video.id}.json`);
 
@@ -110,19 +106,36 @@ async function downloadVideo(video) {
   }
 
   try {
-    console.log(`Downloading ${video.platform}: ${video.title.slice(0, 40)}... (${video.views.toLocaleString()} views)`);
+    console.log(`Downloading: ${video.title.slice(0, 50)}... (${video.views.toLocaleString()} upvotes)`);
+
+    // Reddit videos necesitan formato especial
+    const url = video.url.includes('reddit.com')
+      ? `https://www.reddit.com${video.permalink}`
+      : video.url;
 
     execSync(
-      `${ytdlp} "${video.url}" -f "bestvideo[height<=1080]+bestaudio/best[height<=1080]" --merge-output-format mp4 -o "${finalPath}" --no-playlist 2>&1`,
+      `${ytdlp} "${url}" -f "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best" --merge-output-format mp4 -o "${finalPath}" --no-playlist 2>&1`,
       { stdio: 'pipe', timeout: 120000 }
     );
+
+    // Verificar que el archivo existe y tiene tamaño razonable
+    if (!fs.existsSync(finalPath)) {
+      throw new Error('File not created');
+    }
+
+    const stats = fs.statSync(finalPath);
+    if (stats.size < 10000) {
+      fs.unlinkSync(finalPath);
+      throw new Error('File too small, likely failed');
+    }
 
     // Guardar metadata
     fs.writeFileSync(metaPath, JSON.stringify({
       title: video.title,
       platform: video.platform,
       views: video.views,
-      url: video.url
+      url: video.url,
+      subreddit: subreddit
     }));
 
     console.log('Downloaded:', path.basename(finalPath));
@@ -137,22 +150,22 @@ async function downloadVideo(video) {
 
 // Main
 try {
-  const videos = await searchVideos();
+  const videos = await searchRedditVideos();
 
   if (videos.length === 0) {
     console.log('No videos found');
     process.exit(0);
   }
 
-  // Ordenar por vistas (más vistas primero)
+  // Ordenar por upvotes (más populares primero)
   videos.sort((a, b) => b.views - a.views);
 
-  console.log(`\nTop videos by views:`);
+  console.log(`\nTop videos by upvotes:`);
   videos.slice(0, 10).forEach((v, i) => {
-    console.log(`${i + 1}. [${v.platform}] ${v.views.toLocaleString()} views - ${v.title.slice(0, 50)}`);
+    console.log(`${i + 1}. ${v.views.toLocaleString()} upvotes - ${v.title.slice(0, 50)}`);
   });
 
-  // Descargar solo 1 video por ejecución (el pipeline corre varias veces al día)
+  // Descargar solo 1 video por ejecución
   let downloaded = 0;
   const maxDownloads = 1;
 
@@ -165,5 +178,5 @@ try {
 
   console.log(`\nDownloaded ${downloaded} videos`);
 } catch (err) {
-  await notifyError('viral_finder', err, { search: searchTerm });
+  await notifyError('viral_finder', err, { subreddit });
 }
