@@ -36,8 +36,8 @@ async function searchVideos() {
   try {
     console.log('Searching YouTube Shorts...');
     const ytResult = execSync(
-      `${ytdlp} "ytsearch10:${searchTerm} shorts" --print "%(id)s|%(title)s|%(view_count)s|%(duration)s" --no-download 2>/dev/null`,
-      { encoding: 'utf8', timeout: 60000 }
+      `${ytdlp} "ytsearch10:${searchTerm} shorts" --print "%(id)s|%(title)s|%(view_count)s|%(duration)s" --no-download`,
+      { encoding: 'utf8', timeout: 60000, stdio: ['pipe', 'pipe', 'pipe'] }
     );
 
     for (const line of ytResult.trim().split('\n')) {
@@ -61,6 +61,7 @@ async function searchVideos() {
     console.log(`Found ${videos.filter(v => v.platform === 'youtube').length} YouTube videos`);
   } catch (err) {
     console.log('YouTube search failed:', err.message);
+    if (err.stderr) console.log('stderr:', err.stderr.toString());
   }
 
   // TikTok (búsqueda limitada sin auth)

@@ -14,9 +14,10 @@ RUN apt-get update && apt-get install -y \
 RUN python3 -m venv /opt/whisper
 ENV PATH="/opt/whisper/bin:$PATH"
 
-# Instalar faster-whisper y yt-dlp DENTRO del venv
+# Instalar faster-whisper y yt-dlp DENTRO del venv (nightly para últimos fixes de YouTube)
 RUN pip install --upgrade pip \
-    && pip install faster-whisper==1.0.3 yt-dlp
+    && pip install faster-whisper==1.0.3 \
+    && pip install --upgrade yt-dlp
 
 # App Node
 WORKDIR /app
