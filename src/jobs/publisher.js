@@ -1,5 +1,7 @@
+import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
+import { notifyError } from '../lib/notify.js';
 
 const dataPath = process.env.DATA_PATH || '/data';
 const out = `${dataPath}/out`;
@@ -149,7 +151,7 @@ for (const videoFile of videos) {
 
     console.log('Published:', baseName, '-> moved to published/');
   } catch (err) {
-    console.error('Failed to publish', baseName, err.message);
+    await notifyError('publisher', err, { video: baseName });
   }
 }
 

@@ -1,6 +1,8 @@
+import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
+import { notifyError } from '../lib/notify.js';
 
 const dataPath = process.env.DATA_PATH || '/data';
 const out = `${dataPath}/out`;
@@ -85,7 +87,7 @@ print(f"Transcribed {len(words)} words")
 
     console.log('Done:', baseName);
   } catch (err) {
-    console.error('Failed to transcribe', baseName, err.message);
+    await notifyError('transcribe', err, { video: baseName });
     // Crear JSON vacío para no bloquear el pipeline
     fs.writeFileSync(jsonPath, JSON.stringify({ words: [], language: 'en' }));
   }

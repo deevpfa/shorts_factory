@@ -1,6 +1,8 @@
+import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
+import { notifyError } from '../lib/notify.js';
 
 const dataPath = process.env.DATA_PATH || '/data';
 const inbox = `${dataPath}/inbox`;
@@ -123,7 +125,7 @@ for (const videoFile of videos) {
     fs.unlinkSync(inputPath);
     console.log('Done:', baseName, '-> deleted from inbox');
   } catch (err) {
-    console.error('Failed to edit', videoFile, err.message);
+    await notifyError('editor', err, { video: videoFile });
   }
 }
 

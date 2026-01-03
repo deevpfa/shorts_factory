@@ -1,6 +1,8 @@
+import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
+import { notifyError } from '../lib/notify.js';
 
 const dataPath = process.env.DATA_PATH || '/data';
 const out = `${dataPath}/out`;
@@ -118,7 +120,7 @@ for (const videoFile of videos) {
 
     console.log('Done:', baseName);
   } catch (err) {
-    console.error('Failed to caption', baseName, err.message);
+    await notifyError('captioner', err, { video: baseName });
     // Limpiar .ass si quedó
     if (fs.existsSync(assPath)) {
       fs.unlinkSync(assPath);

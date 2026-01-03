@@ -1,12 +1,14 @@
+import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
+import { notifyError } from '../lib/notify.js';
 
 const dataPath = process.env.DATA_PATH || '/data';
 const out = `${dataPath}/out`;
 const temp = `${dataPath}/temp`;
 
 // Limpiar archivos más viejos que X días
-const cleanOldFiles = (dir, maxAgeDays) => {
+const cleanOldFiles = async (dir, maxAgeDays) => {
   if (!fs.existsSync(dir)) return;
 
   const files = fs.readdirSync(dir);
@@ -27,7 +29,7 @@ const cleanOldFiles = (dir, maxAgeDays) => {
         cleaned++;
       }
     } catch (e) {
-      console.error('Error cleaning', filePath, e.message);
+      await notifyError('cleaner', e, { file: filePath });
     }
   }
 
@@ -37,11 +39,11 @@ const cleanOldFiles = (dir, maxAgeDays) => {
 console.log('Running cleaner...');
 
 // Limpiar out/ - videos editados más viejos de 1 día
-const outCleaned = cleanOldFiles(out, 1);
+const outCleaned = await cleanOldFiles(out, 1);
 console.log(`Cleaned ${outCleaned} files from out/`);
 
 // Limpiar temp/ - archivos temporales más viejos de 12 horas
-const tempCleaned = cleanOldFiles(temp, 0.5);
+const tempCleaned = await cleanOldFiles(temp, 0.5);
 console.log(`Cleaned ${tempCleaned} files from temp/`);
 
 console.log('Cleaner finished');

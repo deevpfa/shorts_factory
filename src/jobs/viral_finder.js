@@ -1,6 +1,8 @@
+import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
+import { notifyError } from '../lib/notify.js';
 
 const dataPath = process.env.DATA_PATH || '/data';
 const inbox = `${dataPath}/inbox`;
@@ -91,7 +93,7 @@ for (const c of j.data.children) {
       console.log('downloaded (fallback)', finalPath, '-', title.slice(0, 50));
     }
   } catch (err) {
-    console.error('Failed to download', id, err.message);
+    await notifyError('viral_finder', err, { videoId: id, title: title.slice(0, 50) });
     // Limpiar temporales
     const tempVideo = path.join(temp, `${id}_video.mp4`);
     const tempAudio = path.join(temp, `${id}_audio.mp4`);
