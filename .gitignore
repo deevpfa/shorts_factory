@@ -7,6 +7,10 @@ node_modules/
 
 # Data (local development only)
 data/
+!data/face/
+!data/face/face.mp4
+!data/audio/
+!data/audio/backup.mp3
 
 # OS
 .DS_Store
