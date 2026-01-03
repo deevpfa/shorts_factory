@@ -1,14 +1,11 @@
 import fs from 'fs';
 import path from 'path';
-import fetch from 'node-fetch';
-import Database from 'better-sqlite3';
 
-const published = '/data/published';
-const dbPath = '/data/db/shorts.db';
+const dataPath = process.env.DATA_PATH || '/data';
+const out = `${dataPath}/out`;
+const published = `${dataPath}/published`;
 
 fs.mkdirSync(published, { recursive: true });
-
-const db = new Database(dbPath);
 
 const {
   METRICOOL_TOKEN,
@@ -24,7 +21,7 @@ if (!METRICOOL_TOKEN || !METRICOOL_USER_ID || !METRICOOL_BLOG_ID) {
 }
 
 const BASE_URL = 'https://app.metricool.com/api';
-const platforms = (METRICOOL_PLATFORMS || 'tiktok,instagram,youtube').split(',').map(p => p.trim().toUpperCase());
+const platforms = (METRICOOL_PLATFORMS || 'tiktok,instagram').split(',').map(p => p.trim().toUpperCase());
 
 // Upload video to tmpfiles.org (temporary public storage)
 async function uploadToTempStorage(filePath) {
@@ -66,7 +63,7 @@ async function schedulePost(mediaUrl, title) {
   const providers = platforms.map(network => ({ network }));
 
   const postConfig = {
-    text: title, // Already formatted with hashtags from description_generator
+    text: title,
     publicationDate: {
       dateTime: dateTime,
       timezone: 'America/Argentina/Buenos_Aires'
@@ -125,39 +122,35 @@ async function schedulePost(mediaUrl, title) {
   return data;
 }
 
-const videos = db.prepare(`
-  SELECT id, source_path, title, description FROM videos
-  WHERE status = 'captioned'
-  LIMIT 1
-`).all();
+// Obtener todos los _captioned.mp4 de out
+const videos = fs.readdirSync(out).filter(f => f.endsWith('_captioned.mp4'));
 
-for (const video of videos) {
+console.log('Videos to publish:', videos.length);
+console.log('Platforms:', platforms.join(', '));
+
+for (const videoFile of videos) {
+  const videoPath = path.join(out, videoFile);
+  const baseName = videoFile.replace('_captioned.mp4', '');
+
   try {
-    console.log('Publishing', video.id, 'to platforms:', platforms.join(', '));
+    console.log('Publishing:', videoFile);
 
     // Step 1: Upload to temporary public storage
-    const mediaUrl = await uploadToTempStorage(video.source_path);
+    const mediaUrl = await uploadToTempStorage(videoPath);
 
     // Step 2: Schedule post on all platforms via Metricool
-    // Use AI-generated description if available, otherwise fallback to title
-    const postText = video.description || video.title || `Amazing viral content ${video.id}`;
+    const postText = `Check this out! 🔥 #viral #shorts #trending`;
     const result = await schedulePost(mediaUrl, postText);
     console.log('Scheduled post ID:', result.data?.id);
 
     // Move to published folder
-    const destPath = path.join(published, path.basename(video.source_path));
-    fs.renameSync(video.source_path, destPath);
+    const destPath = path.join(published, videoFile);
+    fs.renameSync(videoPath, destPath);
 
-    db.prepare(`
-      UPDATE videos
-      SET status = 'published', source_path = ?, published_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(destPath, video.id);
-
-    console.log('Published', video.id, 'to', platforms.join(', '));
+    console.log('Published:', baseName, '-> moved to published/');
   } catch (err) {
-    console.error('Failed to publish', video.id, err.message);
+    console.error('Failed to publish', baseName, err.message);
   }
 }
 
-db.close();
+console.log('Publisher finished');

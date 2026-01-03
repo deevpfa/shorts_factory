@@ -1,43 +1,17 @@
 import fs from 'fs';
 import path from 'path';
-import Database from 'better-sqlite3';
 
-const work = '/data/work';
-const out = '/data/out';
-const published = '/data/published';
-const inbox = '/data/inbox';
-const temp = '/data/temp';
-const dbPath = '/data/db/shorts.db';
+const dataPath = process.env.DATA_PATH || '/data';
+const out = `${dataPath}/out`;
+const temp = `${dataPath}/temp`;
 
-// Borrar videos publicados inmediatamente (ya no se necesitan)
-const DELETE_PUBLISHED_IMMEDIATELY = true;
-// O si prefieres mantenerlos unos días:
-const MAX_AGE_DAYS = 1;
-
-const db = new Database(dbPath);
-
-// Limpiar videos publicados
-const publishedVideos = db.prepare(`
-  SELECT id, source_path FROM videos
-  WHERE status = 'published'
-  ${DELETE_PUBLISHED_IMMEDIATELY ? '' : `AND published_at < datetime('now', '-${MAX_AGE_DAYS} days')`}
-`).all();
-
-for (const video of publishedVideos) {
-  if (video.source_path && fs.existsSync(video.source_path)) {
-    fs.unlinkSync(video.source_path);
-    console.log('deleted published video', video.source_path);
-  }
-
-  db.prepare('DELETE FROM videos WHERE id = ?').run(video.id);
-  console.log('removed from db', video.id);
-}
-
-// Limpiar archivos huerfanos en todas las carpetas
-const cleanOrphanFiles = (dir, maxAgeDays = 1) => {
+// Limpiar archivos más viejos que X días
+const cleanOldFiles = (dir, maxAgeDays) => {
   if (!fs.existsSync(dir)) return;
 
   const files = fs.readdirSync(dir);
+  let cleaned = 0;
+
   for (const file of files) {
     const filePath = path.join(dir, file);
     try {
@@ -49,28 +23,25 @@ const cleanOrphanFiles = (dir, maxAgeDays = 1) => {
 
       if (ageDays > maxAgeDays) {
         fs.unlinkSync(filePath);
-        console.log('cleaned orphan file', filePath);
+        console.log('Deleted:', filePath, `(${ageDays.toFixed(1)} days old)`);
+        cleaned++;
       }
     } catch (e) {
-      console.error('error cleaning', filePath, e.message);
+      console.error('Error cleaning', filePath, e.message);
     }
   }
+
+  return cleaned;
 };
 
-cleanOrphanFiles(work, 1);
-cleanOrphanFiles(out, 1);
-cleanOrphanFiles(published, 1);
-cleanOrphanFiles(temp, 0.5); // 12 horas para temp
-cleanOrphanFiles(inbox, 7); // 7 días para inbox
+console.log('Running cleaner...');
 
-// Limpiar archivos .ass huerfanos
-if (fs.existsSync(out)) {
-  const assFiles = fs.readdirSync(out).filter(f => f.endsWith('.ass'));
-  for (const file of assFiles) {
-    fs.unlinkSync(path.join(out, file));
-    console.log('cleaned orphan ass file', file);
-  }
-}
+// Limpiar out/ - videos editados más viejos de 1 día
+const outCleaned = cleanOldFiles(out, 1);
+console.log(`Cleaned ${outCleaned} files from out/`);
 
-db.close();
-console.log('cleanup complete');
+// Limpiar temp/ - archivos temporales más viejos de 12 horas
+const tempCleaned = cleanOldFiles(temp, 0.5);
+console.log(`Cleaned ${tempCleaned} files from temp/`);
+
+console.log('Cleaner finished');

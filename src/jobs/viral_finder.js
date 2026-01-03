@@ -1,10 +1,10 @@
-import fetch from 'node-fetch';
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 
-const inbox = '/data/inbox';
-const temp = '/data/temp';
+const dataPath = process.env.DATA_PATH || '/data';
+const inbox = `${dataPath}/inbox`;
+const temp = `${dataPath}/temp`;
 fs.mkdirSync(inbox, { recursive: true });
 fs.mkdirSync(temp, { recursive: true });
 

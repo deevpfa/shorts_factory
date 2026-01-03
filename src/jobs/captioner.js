@@ -1,18 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
-import Database from 'better-sqlite3';
 
-const out = '/data/out';
-const dbPath = '/data/db/shorts.db';
-
-const db = new Database(dbPath);
-
-const videos = db.prepare(`
-  SELECT id, source_path, transcription FROM videos
-  WHERE status = 'edited' AND transcription IS NOT NULL
-  LIMIT 1
-`).all();
+const dataPath = process.env.DATA_PATH || '/data';
+const out = `${dataPath}/out`;
 
 // Generar ASS con estilo MrBeast
 function generateMrBeastASS(words, videoWidth = 1080, videoHeight = 1920) {
@@ -62,16 +53,47 @@ function formatASSTime(seconds) {
   return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
 }
 
-for (const video of videos) {
-  const inputPath = video.source_path;
-  const outputPath = path.join(out, `${video.id}_captioned.mp4`);
-  const assPath = path.join(out, `${video.id}.ass`);
+// Obtener todos los _edited.mp4 que tengan .json pero no sean _captioned.mp4
+const videos = fs.readdirSync(out)
+  .filter(f => f.endsWith('_edited.mp4'))
+  .filter(f => {
+    const baseName = f.replace('_edited.mp4', '');
+    const jsonPath = path.join(out, `${baseName}.json`);
+    const captionedPath = path.join(out, `${baseName}_captioned.mp4`);
+    return fs.existsSync(jsonPath) && !fs.existsSync(captionedPath);
+  });
+
+console.log('Videos to caption:', videos.length);
+
+for (const videoFile of videos) {
+  const baseName = videoFile.replace('_edited.mp4', '');
+  const inputPath = path.join(out, videoFile);
+  const jsonPath = path.join(out, `${baseName}.json`);
+  const assPath = path.join(out, `${baseName}.ass`);
+  const outputPath = path.join(out, `${baseName}_captioned.mp4`);
+
+  console.log('Captioning:', videoFile);
 
   try {
-    const transcription = JSON.parse(video.transcription);
+    const transcription = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
 
-    if (!transcription.words || transcription.words.length === 0) {
-      console.log('No words found for', video.id);
+    // Palabras que indican que es solo música/sonido, no speech
+    const musicKeywords = ['music', 'música', 'musica', '[music]', '♪', '♫'];
+    const isOnlyMusic = !transcription.words ||
+      transcription.words.length === 0 ||
+      (transcription.words.length <= 3 &&
+        transcription.words.every(w =>
+          musicKeywords.some(k => w.word.toLowerCase().includes(k))
+        )
+      );
+
+    if (isOnlyMusic) {
+      console.log('Only music detected, copying without captions:', baseName);
+      // Copiar el video sin subtítulos
+      fs.copyFileSync(inputPath, outputPath);
+      // Eliminar el _edited.mp4 ya que tenemos _captioned.mp4
+      fs.unlinkSync(inputPath);
+      fs.unlinkSync(jsonPath);
       continue;
     }
 
@@ -89,20 +111,19 @@ for (const video of videos) {
 
     execSync(ffmpegCmd, { stdio: 'inherit' });
 
-    db.prepare(`
-      UPDATE videos SET status = 'captioned', source_path = ? WHERE id = ?
-    `).run(outputPath, video.id);
-
     // Limpiar archivos intermedios
-    if (fs.existsSync(inputPath) && inputPath !== outputPath) {
-      fs.unlinkSync(inputPath);
-    }
-    fs.unlinkSync(assPath);
+    fs.unlinkSync(inputPath);  // Eliminar _edited.mp4
+    fs.unlinkSync(assPath);    // Eliminar .ass
+    fs.unlinkSync(jsonPath);   // Eliminar .json
 
-    console.log('captioned', video.id);
+    console.log('Done:', baseName);
   } catch (err) {
-    console.error('Failed to caption', video.id, err.message);
+    console.error('Failed to caption', baseName, err.message);
+    // Limpiar .ass si quedó
+    if (fs.existsSync(assPath)) {
+      fs.unlinkSync(assPath);
+    }
   }
 }
 
-db.close();
+console.log('Captioning finished');
