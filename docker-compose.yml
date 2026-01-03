@@ -1,0 +1,9 @@
+
+services:
+  shorts-factory:
+    build: .
+    container_name: shorts-factory
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/data

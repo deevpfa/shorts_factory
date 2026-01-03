@@ -1,0 +1,10 @@
+SHELL=/bin/bash
+PATH=/opt/whisper/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+*/30 * * * * cd /app && node src/jobs/viral_finder.js >> /var/log/cron.log 2>&1
+*/2 * * * * cd /app && node src/jobs/collector.js >> /var/log/cron.log 2>&1
+*/5 * * * * cd /app && node src/jobs/transcribe.js >> /var/log/cron.log 2>&1
+*/5 * * * * cd /app && node src/jobs/editor.js >> /var/log/cron.log 2>&1
+*/10 * * * * cd /app && node src/jobs/captioner.js >> /var/log/cron.log 2>&1
+*/15 * * * * cd /app && node src/jobs/publisher.js >> /var/log/cron.log 2>&1
+0 4 * * * cd /app && node src/jobs/cleaner.js >> /var/log/cron.log 2>&1

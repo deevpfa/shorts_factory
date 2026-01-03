@@ -1,0 +1,24 @@
+services:
+  - type: worker
+    name: shorts-factory
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    region: oregon
+    plan: standard
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 10
+    envVars:
+      - key: METRICOOL_TOKEN
+        sync: false
+      - key: METRICOOL_USER_ID
+        sync: false
+      - key: METRICOOL_BLOG_ID
+        sync: false
+      - key: METRICOOL_PLATFORMS
+        value: tiktok,instagram,youtube
+      - key: FACE_VIDEO_PATH
+        value: /data/face/face.mp4
+      - key: LANG
+        value: en
