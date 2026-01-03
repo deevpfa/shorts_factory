@@ -28,6 +28,10 @@ COPY src ./src
 # Carpetas de data
 RUN mkdir -p /data/inbox /data/out /data/published /data/face /data/temp /data/audio
 
+# Copiar archivos de face y audio
+COPY data/face/face.mp4 /data/face/face.mp4
+COPY data/audio/backup.mp3 /data/audio/backup.mp3
+
 # Variables
 ENV NODE_ENV=production
 ENV DATA_PATH=/data
