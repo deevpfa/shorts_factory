@@ -52,13 +52,13 @@ async function uploadToTempStorage(filePath) {
 }
 
 // Schedule post on multiple platforms via Metricool
-async function schedulePost(mediaUrl, title) {
+async function schedulePost(mediaUrl, title, scheduledDate = null) {
   console.log('Scheduling post on Metricool...');
 
   const url = `${BASE_URL}/v2/scheduler/posts?blogId=${METRICOOL_BLOG_ID}&userId=${METRICOOL_USER_ID}`;
 
-  // Publication date: now + 10 minutes
-  const pubDate = new Date(Date.now() + 10 * 60 * 1000);
+  // Publication date: usar la fecha proporcionada o now + 10 minutes
+  const pubDate = scheduledDate || new Date(Date.now() + 10 * 60 * 1000);
   const dateTime = pubDate.toISOString().slice(0, 19);
 
   // Build providers array based on configured platforms
@@ -124,11 +124,47 @@ async function schedulePost(mediaUrl, title) {
   return data;
 }
 
-// Obtener todos los _captioned.mp4 de out
-const videos = fs.readdirSync(out).filter(f => f.endsWith('_captioned.mp4'));
+// Límite diario de publicaciones
+const MAX_DAILY_POSTS = 4;
+const publishedLogPath = `${dataPath}/published_today.json`;
 
-console.log('Videos to publish:', videos.length);
+// Cargar registro de publicaciones del día
+function getPublishedToday() {
+  try {
+    if (!fs.existsSync(publishedLogPath)) return { date: '', count: 0 };
+    const data = JSON.parse(fs.readFileSync(publishedLogPath, 'utf8'));
+    const today = new Date().toISOString().slice(0, 10);
+    // Reset si es un nuevo día
+    if (data.date !== today) return { date: today, count: 0 };
+    return data;
+  } catch {
+    return { date: new Date().toISOString().slice(0, 10), count: 0 };
+  }
+}
+
+function savePublishedToday(data) {
+  fs.writeFileSync(publishedLogPath, JSON.stringify(data));
+}
+
+// Obtener todos los _captioned.mp4 de out
+const allVideos = fs.readdirSync(out).filter(f => f.endsWith('_captioned.mp4'));
+const publishedToday = getPublishedToday();
+const remaining = MAX_DAILY_POSTS - publishedToday.count;
+
+console.log('Videos available:', allVideos.length);
+console.log('Published today:', publishedToday.count, '/', MAX_DAILY_POSTS);
 console.log('Platforms:', platforms.join(', '));
+
+if (remaining <= 0) {
+  console.log('Daily limit reached. Skipping publishing.');
+  process.exit(0);
+}
+
+// Solo publicar los que faltan para el límite diario
+const videos = allVideos.slice(0, remaining);
+console.log('Videos to publish now:', videos.length);
+
+let publishedCount = 0;
 
 for (const videoFile of videos) {
   const videoPath = path.join(out, videoFile);
@@ -140,19 +176,28 @@ for (const videoFile of videos) {
     // Step 1: Upload to temporary public storage
     const mediaUrl = await uploadToTempStorage(videoPath);
 
-    // Step 2: Schedule post on all platforms via Metricool
+    // Step 2: Schedule post - espaciar las publicaciones (cada una 3 horas después)
+    const hoursOffset = publishedCount * 3;
+    const pubDate = new Date(Date.now() + (10 + hoursOffset * 60) * 60 * 1000);
+
     const postText = `Check this out! 🔥 #viral #shorts #trending`;
-    const result = await schedulePost(mediaUrl, postText);
-    console.log('Scheduled post ID:', result.data?.id);
+    const result = await schedulePost(mediaUrl, postText, pubDate);
+    console.log('Scheduled post ID:', result.data?.id, 'at', pubDate.toISOString());
 
     // Move to published folder
     const destPath = path.join(published, videoFile);
     fs.renameSync(videoPath, destPath);
 
     console.log('Published:', baseName, '-> moved to published/');
+    publishedCount++;
+
+    // Actualizar contador diario
+    publishedToday.date = new Date().toISOString().slice(0, 10);
+    publishedToday.count++;
+    savePublishedToday(publishedToday);
   } catch (err) {
     await notifyError('publisher', err, { video: baseName });
   }
 }
 
-console.log('Publisher finished');
+console.log(`Publisher finished. Published ${publishedCount} videos today (${publishedToday.count}/${MAX_DAILY_POSTS} daily).`);

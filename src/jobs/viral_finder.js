@@ -152,9 +152,9 @@ try {
     console.log(`${i + 1}. [${v.platform}] ${v.views.toLocaleString()} views - ${v.title.slice(0, 50)}`);
   });
 
-  // Descargar los top 5 con más vistas
+  // Descargar solo 1 video por ejecución (el pipeline corre varias veces al día)
   let downloaded = 0;
-  const maxDownloads = 5;
+  const maxDownloads = 1;
 
   for (const video of videos) {
     if (downloaded >= maxDownloads) break;
