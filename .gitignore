@@ -11,6 +11,7 @@ data/
 !data/face/face.mp4
 !data/audio/
 !data/audio/backup.mp3
+!data/cookies.txt
 
 # OS
 .DS_Store

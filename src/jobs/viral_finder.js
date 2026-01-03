@@ -54,33 +54,27 @@ async function searchRedditVideos() {
     for (const post of data.data.children) {
       const p = post.data;
 
-      // Solo posts con video o enlaces a videos
-      const isVideo = p.is_video ||
-        p.url?.includes('v.redd.it') ||
-        p.url?.includes('streamable.com') ||
-        p.url?.includes('gfycat.com') ||
-        p.url?.includes('imgur.com/') && p.url?.includes('.mp4');
+      // Solo posts con video de Reddit
+      const isVideo = p.is_video && p.media?.reddit_video?.fallback_url;
 
       if (!isVideo) continue;
 
       // Filtrar por upvotes (popularidad)
       if (p.ups < 1000) continue;
 
-      // Obtener duración si está disponible
+      // Obtener duración
       const duration = p.media?.reddit_video?.duration || 0;
 
-      // Solo videos cortos (menos de 60 segundos) o sin duración conocida
+      // Solo videos cortos (menos de 60 segundos)
       if (duration > 60) continue;
 
       videos.push({
         platform: 'reddit',
         id: p.id,
         title: p.title || '',
-        views: p.ups, // Usamos upvotes como proxy de popularidad
+        views: p.ups,
         duration: duration,
-        url: p.url?.includes('v.redd.it')
-          ? `https://www.reddit.com${p.permalink}`
-          : p.url,
+        url: `https://www.reddit.com${p.permalink}`,
         permalink: p.permalink
       });
     }
@@ -108,13 +102,8 @@ async function downloadVideo(video) {
   try {
     console.log(`Downloading: ${video.title.slice(0, 50)}... (${video.views.toLocaleString()} upvotes)`);
 
-    // Reddit videos necesitan formato especial
-    const url = video.url.includes('reddit.com')
-      ? `https://www.reddit.com${video.permalink}`
-      : video.url;
-
     execSync(
-      `${ytdlp} "${url}" -f "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best" --merge-output-format mp4 -o "${finalPath}" --no-playlist 2>&1`,
+      `${ytdlp} "${video.url}" -f "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best" --merge-output-format mp4 -o "${finalPath}" --no-playlist 2>&1`,
       { stdio: 'pipe', timeout: 120000 }
     );
 
@@ -142,7 +131,6 @@ async function downloadVideo(video) {
     return true;
   } catch (err) {
     console.error(`Failed to download ${video.id}:`, err.message);
-    // Limpiar archivo parcial
     if (fs.existsSync(finalPath)) fs.unlinkSync(finalPath);
     return false;
   }
