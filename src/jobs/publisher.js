@@ -32,7 +32,7 @@ async function uploadToTempStorage(filePath) {
   const fileName = path.basename(filePath);
 
   const formData = new FormData();
-  formData.append('file', new Blob([fileBuffer]), fileName);
+  formData.append('file', new Blob([fileBuffer], { type: 'video/mp4' }), fileName);
 
   const res = await fetch('https://tmpfiles.org/api/v1/upload', {
     method: 'POST',
